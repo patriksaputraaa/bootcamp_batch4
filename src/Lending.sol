@@ -33,6 +33,5 @@ contract Lending {
 
         //withdraw atau tf usdc ke user
         IERC20(usdc).transfer(msg.sender, borrowAmount);
-        console.log("Balance of usdc", IERC20(usdc).balanceOf(msg.sender));
     }
 }
