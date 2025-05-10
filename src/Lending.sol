@@ -12,7 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IAave {
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
-    function borrow(address asset, uint256 amount, uint16 rateMode, uint16 referralCode, address onBehalfOf) external;
+    function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external;
 }
 
 contract Lending {
@@ -29,9 +29,10 @@ contract Lending {
         IAave(aave).supply(weth, supplyAmount, address(this), 0);
 
         //borrow ke aave
-        IAave(aave).borrow(usdc, borrowAmount, 0, 0, address(this));
+        IAave(aave).borrow(usdc, borrowAmount, 2, 0, address(this));
 
         //withdraw atau tf usdc ke user
         IERC20(usdc).transfer(msg.sender, borrowAmount);
+        console.log("Balance of usdc", IERC20(usdc).balanceOf(msg.sender));
     }
 }
