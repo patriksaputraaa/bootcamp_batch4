@@ -24,6 +24,7 @@ contract Flashloan {
     address weth = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address usdc = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
 
+    // dieksekusi oleh balancer
     function receiveFlashLoan(
         IERC20[] memory tokens,
         uint256[] memory amounts,
@@ -57,7 +58,7 @@ contract Flashloan {
         //borrow ke AAVE
         IAave(aave).borrow(usdc, borrowAmount, 2, 0, address(this));
 
-        // bayar flashloan ke balance
+        // bayar flashloan ke balance = PENTING TF BALIK
         IERC20(usdc).transfer(balancerVault, borrowAmount);    
     }
 
@@ -71,6 +72,7 @@ contract Flashloan {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = borrowAmount;
 
+        // minta talangan
         IFlashloan(balancerVault).flashLoan(address(this), tokens, amounts, abi.encode(supplyAmount, borrowAmount));
     }
 }
