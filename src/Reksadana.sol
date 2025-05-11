@@ -12,18 +12,34 @@ interface IAggregatorV3 {
 
     function version() external view returns (uint256);
 
-    function getRoundData(uint80 _roundId)
+    function getRoundData(
+        uint80 _roundId
+    )
         external
         view
-        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
 
     function latestRoundData()
         external
         view
-        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
 }
 
 contract Reksadana is ERC20 {
+    error ZeroAmount();
+
     address uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
     // tokens
@@ -37,21 +53,124 @@ contract Reksadana is ERC20 {
 
     constructor() ERC20("Reksadana", "RKS") {}
 
-    function totalAsset() public returns(uint256) {
+    function totalAsset() public returns (uint256) {
         // hitung harga usdc dalam usd
         (, int256 usdcPrice, , , ) = IAggregatorV3(baseFeed).latestRoundData();
 
         // hitung harga wbtc dalam usdc
         (, int256 wbtcPrice, , , ) = IAggregatorV3(wbtcFeed).latestRoundData();
-        uint256 wbtcPriceInUsd = uint256(wbtcPrice) * 1e6 / uint256(usdcPrice);
+        uint256 wbtcPriceInUsd = (uint256(wbtcPrice) * 1e6) /
+            uint256(usdcPrice);
 
         //hitung harga weth dalam usd
         (, int256 wethPrice, , , ) = IAggregatorV3(wethFeed).latestRoundData();
-        uint256 wethPriceInUsd = uint256(wethPrice) * 1e6 / uint256(usdcPrice);
+        uint256 wethPriceInUsd = (uint256(wethPrice) * 1e6) /
+            uint256(usdcPrice);
 
-        uint256 totalWethAsset = IERC20(weth).balanceOf(address(this)) * wethPriceInUsd / 1e18; //tergantung brapa decimal
-        uint256 totalWbtcAsset = IERC20(wbtc).balanceOf(address(this)) * wbtcPriceInUsd / 1e8;
-        
+        uint256 totalWethAsset = (IERC20(weth).balanceOf(address(this)) *
+            wethPriceInUsd) / 1e18; //tergantung brapa decimal
+        uint256 totalWbtcAsset = (IERC20(wbtc).balanceOf(address(this)) *
+            wbtcPriceInUsd) / 1e8;
+
         return totalWethAsset + totalWbtcAsset;
+    }
+
+    function deposit(uint256 amount) public {
+        if (amount == 0) {
+            revert ZeroAmount();
+        }
+        uint256 totalAsset = totalAsset();
+        uint256 totalShares =  totalSupply();
+        uint256 shares = 0;
+        if(totalShares == 0){
+            shares = amount;
+        } else {
+            shares = amount * totalShares / totalAsset;
+        }
+
+        _mint(msg.sender,shares);
+
+        
+        // transfer usdc from user to this contract
+        IERC20(usdc).transferFrom(msg.sender, address(this), amount);
+
+        uint256 amountIn = amount / 2;
+
+        // swap usdc to weth
+        IERC20(usdc).approve(uniswapRouter, amountIn);
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: usdc,
+            tokenOut: weth,
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountIn,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+        ISwapRouter(uniswapRouter).exactInputSingle(params);
+
+        // swap usdc to wbtc
+        IERC20(usdc).approve(uniswapRouter, amountIn);
+        params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: usdc,
+            tokenOut: wbtc,
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountIn,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+        ISwapRouter(uniswapRouter).exactInputSingle(params);
+
+    }
+
+    function withdraw(uint256 shares) public {
+        if (shares == 0) {
+            revert ZeroAmount();
+        }
+        uint256 totalShares = totalSupply();
+        uint256 PROPORTION_SCALED = 1e18;
+
+        // hitung proporsi dari total asset
+        uint256 proportion = shares * PROPORTION_SCALED / totalShares;
+
+        uint256 amountWbtc = IERC20(wbtc).balanceOf(address(this)) * proportion / PROPORTION_SCALED;
+        uint256 amountWeth = IERC20(weth).balanceOf(address(this)) * proportion / PROPORTION_SCALED;
+
+        _burn(msg.sender, shares);
+
+        // swap wbtc to usdc
+        IERC20(wbtc).approve(uniswapRouter, amountWbtc);
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: wbtc,
+            tokenOut: usdc,
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountWbtc,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+        ISwapRouter(uniswapRouter).exactInputSingle(params);
+
+        //swap weth to usdc
+        IERC20(weth).approve(uniswapRouter, amountWeth);
+        params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: weth,
+            tokenOut: usdc,
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountWeth,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+        ISwapRouter(uniswapRouter).exactInputSingle(params);
+
+        // transfer usdc to user
+        uint256 amountOut = IERC20(usdc).balanceOf(address(this));
+        IERC20(usdc).transfer(msg.sender, amountOut);
     }
 }
